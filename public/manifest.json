@@ -1,0 +1,20 @@
+{
+  "id": "/",
+  "name": "Folha Viva - Monitoramento Agrícola",
+  "short_name": "Folha Viva",
+  "description": "Plataforma de monitoramento agrícola para café e capim com mapas abertos e offline-first.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#FFFDF7",
+  "theme_color": "#173F2A",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "192x192 512x512",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}
