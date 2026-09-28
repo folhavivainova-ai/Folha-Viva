@@ -20,76 +20,58 @@ service cloud.firestore {
 
     // Producer Profiles
     match /producers/{producerId} {
-      allow read: if true;
-      allow create: if isValidId(producerId)
-        && incoming().id == producerId
-        && incoming().displayName is string
-        && incoming().displayName.size() > 0
-        && incoming().displayName.size() <= 120
-        && incoming().deviceSessionId is string
-        && incoming().deviceSessionId.size() <= 128
-        && incoming().createdAt is string;
-      allow update: if isValidId(producerId)
-        && incoming().id == existing().id
-        && incoming().deviceSessionId == existing().deviceSessionId
-        && incoming().displayName is string
-        && incoming().displayName.size() > 0
-        && incoming().displayName.size() <= 120;
+      allow read, write: if true;
+    }
+
+    // Lookup direto por CPF
+    match /producers_by_cpf/{cpf} {
+      allow read, write: if true;
     }
 
     // Properties
     match /properties/{propertyId} {
-      allow read: if isValidId(propertyId);
-      allow create: if isValidId(propertyId)
-        && incoming().id == propertyId
-        && incoming().producerId is string
-        && incoming().name is string
-        && incoming().name.size() > 0
-        && incoming().name.size() <= 150
-        && incoming().activityProfile in ['coffee', 'pasture', 'mixed']
-        && incoming().createdAt is string;
-      allow update: if isValidId(propertyId)
-        && incoming().id == existing().id
-        && incoming().producerId == existing().producerId
-        && incoming().name is string
-        && incoming().name.size() > 0
-        && incoming().name.size() <= 150
-        && incoming().activityProfile in ['coffee', 'pasture', 'mixed'];
-      allow delete: if isValidId(propertyId);
+      allow read, write: if true;
     }
 
     // Plots
     match /plots/{plotId} {
-      allow read: if isValidId(plotId);
-      allow create: if isValidId(plotId)
-        && incoming().id == plotId
-        && incoming().propertyId is string
-        && incoming().name is string
-        && incoming().name.size() > 0
-        && incoming().name.size() <= 100
-        && incoming().areaHa is number
-        && incoming().active is bool
-        && incoming().createdAt is string;
-      allow update: if isValidId(plotId)
-        && incoming().id == existing().id
-        && incoming().propertyId == existing().propertyId
-        && incoming().name is string
-        && incoming().name.size() > 0
-        && incoming().name.size() <= 100;
-      allow delete: if isValidId(plotId);
+      allow read, write: if true;
     }
 
     // Field Events (append-only)
     match /field_events/{eventId} {
-      allow read: if isValidId(eventId);
-      allow create: if isValidId(eventId)
-        && incoming().id == eventId
-        && incoming().plotId is string
-        && incoming().type in ['irrigation', 'pasture_cut', 'grazing_in', 'grazing_out', 'inspection', 'occurrence', 'note', 'flowering_observed']
-        && incoming().occurredAt is string
-        && incoming().createdAt is string;
-      allow update: if false; // Append-only by design
-      allow delete: if false;
+      allow read, create: if true;
+      allow update, delete: if false; // Append-only
+    }
+
+    // Satellite Scenes (Volume 04)
+    match /satellite_scenes/{sceneId} {
+      allow read, write: if true;
+    }
+
+    // Plot Satellite Metrics (Volume 04)
+    match /plot_satellite_metrics/{metricId} {
+      allow read, write: if true;
+    }
+
+    // Weather Snapshots (Volume 05)
+    match /weather_snapshots/{propertyId} {
+      allow read, write: if true;
+    }
+
+    // Irrigation Assessments (Volume 09)
+    match /irrigation_assessments/{plotId} {
+      allow read, write: if true;
+    }
+
+    // Phenology Events (Volume 07)
+    match /phenology_events/{plotId} {
+      allow read, write: if true;
+    }
+
+    // Pasture Managements (Volume 08)
+    match /pasture_managements/{plotId} {
+      allow read, write: if true;
     }
   }
 }

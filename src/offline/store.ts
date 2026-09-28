@@ -1,5 +1,5 @@
 /**
- * Offline Store & Fila de Mutações Idempotente (Volume 02-E01, Volume 14)
+ * Armazenamento Offline e Fila de Mutações Idempotente (Volume 02-E01, Volume 14)
  * Persiste localmente a identidade invisível, produtor, propriedades, talhões e eventos.
  * Sem dados fictícios iniciais.
  */

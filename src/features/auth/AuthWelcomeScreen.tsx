@@ -29,21 +29,15 @@ export const AuthWelcomeScreen: React.FC<AuthWelcomeScreenProps> = ({
   const isCpfValid = cleanCpf.length === 11 && isValidCPF(cpfInput);
   const isCpfComplete = cleanCpf.length === 11;
 
-  const handleCpfChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const formatted = formatCPF(e.target.value);
-    setCpfInput(formatted);
-    if (searchError) setSearchError(null);
-  };
-
-  const handleLoginSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!isCpfValid) return;
+  const executeLogin = async (rawOrFormattedCpf: string) => {
+    const clean = stripNonDigits(rawOrFormattedCpf);
+    if (clean.length !== 11 || !isValidCPF(rawOrFormattedCpf)) return;
 
     setIsSearching(true);
     setSearchError(null);
 
     try {
-      const result = await FirestoreSyncService.findProducerByCPF(cpfInput);
+      const result = await FirestoreSyncService.findProducerByCPF(rawOrFormattedCpf);
       if (result) {
         onLoginSuccess(result);
       } else {
@@ -54,6 +48,24 @@ export const AuthWelcomeScreen: React.FC<AuthWelcomeScreenProps> = ({
     } finally {
       setIsSearching(false);
     }
+  };
+
+  const handleCpfChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const formatted = formatCPF(e.target.value);
+    setCpfInput(formatted);
+    if (searchError) setSearchError(null);
+
+    const clean = stripNonDigits(formatted);
+    if (clean.length === 11 && isValidCPF(formatted)) {
+      // Reconhece e entra automaticamente assim que digitar os 11 números válidos
+      executeLogin(formatted);
+    }
+  };
+
+  const handleLoginSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!isCpfValid || isSearching) return;
+    executeLogin(cpfInput);
   };
 
   return (
@@ -136,7 +148,7 @@ export const AuthWelcomeScreen: React.FC<AuthWelcomeScreenProps> = ({
           <div className="text-center">
             <span className="inline-flex items-center gap-1.5 text-xs text-[#6B4A35] bg-white/60 px-3 py-1.5 rounded-full border border-[#D8C4A8]/40">
               <ShieldCheck className="w-3.5 h-3.5 text-[#2F7D4A]" />
-              <span>Acesso seguro sem senha · Dados salvos no Firebase & Offline</span>
+              <span>Acesso seguro sem senha · Dados salvos no Firebase e no dispositivo</span>
             </span>
           </div>
         </div>
@@ -179,13 +191,19 @@ export const AuthWelcomeScreen: React.FC<AuthWelcomeScreenProps> = ({
 
               {/* Feedback de Validação em Tempo Real */}
               <div className="mt-2 text-xs">
-                {isCpfComplete && !isCpfValid && (
+                {isSearching && (
+                  <p className="text-[#2F7D4A] font-semibold flex items-center gap-2 bg-emerald-50 p-2.5 rounded-lg border border-emerald-200">
+                    <span className="w-3.5 h-3.5 border-2 border-[#2F7D4A] border-t-transparent rounded-full animate-spin shrink-0" />
+                    <span>CPF reconhecido! Acessando sua lavoura no Firebase...</span>
+                  </p>
+                )}
+                {!isSearching && isCpfComplete && !isCpfValid && (
                   <p className="text-[#B7372E] font-medium flex items-center gap-1">
                     <AlertCircle className="w-3.5 h-3.5 shrink-0" />
                     <span>CPF inválido segundo o algoritmo de verificação.</span>
                   </p>
                 )}
-                {isCpfValid && (
+                {!isSearching && isCpfValid && (
                   <p className="text-[#2F7D4A] font-medium flex items-center gap-1">
                     <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
                     <span>Formato e dígitos verificadores válidos.</span>

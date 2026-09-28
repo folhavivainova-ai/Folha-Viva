@@ -98,6 +98,18 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
   };
 
   const handleFinalSubmit = () => {
+    // Se a localização não foi capturada pelo GPS mas o talhão foi desenhado, derivar o centroide do talhão
+    let finalLocation = location;
+    if (!finalLocation && plotCoords.length >= 3) {
+      const avgLat = plotCoords.reduce((acc, c) => acc + c[0], 0) / plotCoords.length;
+      const avgLng = plotCoords.reduce((acc, c) => acc + c[1], 0) / plotCoords.length;
+      finalLocation = {
+        lat: Number(avgLat.toFixed(6)),
+        lng: Number(avgLng.toFixed(6)),
+        accuracyMeters: 10,
+      };
+    }
+
     onComplete({
       producerName: producerName.trim() || 'Produtor',
       propertyName: propertyName.trim() || 'Minha Fazenda',
@@ -107,7 +119,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
       coffeeSubtype: activityProfile !== 'pasture' ? coffeeSubtype : undefined,
       coffeeCultivar: coffeeCultivar.trim() || undefined,
       pastureVariety: (customPasture || pastureVariety).trim() || undefined,
-      location,
+      location: finalLocation,
       initialPlotPolygon: plotCoords.length >= 3 ? plotCoords : undefined,
       initialPlotAreaHa: plotAreaHa > 0 ? plotAreaHa : undefined,
       initialPlotName: plotName.trim() || 'Talhão 1',
@@ -118,7 +130,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
     <div className="max-w-2xl mx-auto px-4 py-8">
       {/* Etapa 1: Dados do Produtor (CPF, Telefone, Nome, Fazenda) */}
       {step === 1 && (
-        <Card title="Cadastro do Produtor & Propriedade">
+        <Card title="Cadastro do Produtor e Propriedade">
           <div className="space-y-4 pt-2">
             <p className="text-xs text-[#6B4A35] leading-relaxed">
               Preencha os dados de identificação para acessar seu monitoramento a qualquer momento por CPF.

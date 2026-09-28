@@ -130,12 +130,62 @@
         }
       },
       "required": ["id", "plotId", "type", "occurredAt", "createdAt"]
+    },
+    "SatelliteScene": {
+      "title": "SatelliteScene",
+      "description": "Cena real de satélite Sentinel-2 ou Sentinel-1 (Volume 04)",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "plotId": { "type": "string" },
+        "provider": { "type": "string" },
+        "mission": { "type": "string" },
+        "acquiredAt": { "type": "string" },
+        "cloudCoveragePct": { "type": "number" },
+        "qualityFlag": { "type": "string" },
+        "visualUrl": { "type": "string" }
+      },
+      "required": ["id", "provider", "mission", "acquiredAt"]
+    },
+    "PlotSatelliteMetric": {
+      "title": "PlotSatelliteMetric",
+      "description": "Métricas espectrais agregadas por talhão como NDVI, NDRE, SAVI (Volume 04 e 10)",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "plotId": { "type": "string" },
+        "sceneId": { "type": "string" },
+        "metric": { "type": "string" },
+        "mean": { "type": "number" },
+        "min": { "type": "number" },
+        "max": { "type": "number" },
+        "confidence": { "type": "string" },
+        "freshnessDate": { "type": "string" }
+      },
+      "required": ["id", "plotId", "metric", "mean"]
+    },
+    "WeatherSnapshot": {
+      "title": "WeatherSnapshot",
+      "description": "Snapshot meteorológico real Open-Meteo com ET0 e chuva (Volume 05)",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "propertyId": { "type": "string" },
+        "accumulatedRainLast7DaysMm": { "type": "number" },
+        "source": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "propertyId", "updatedAt"]
     }
   },
   "firestore": {
     "/producers/{producerId}": {
       "schema": "ProducerProfile",
       "description": "Coleção de perfis técnicos dos produtores"
+    },
+    "/producers_by_cpf/{cpf}": {
+      "schema": "ProducerProfile",
+      "description": "Índice direto de consulta rápida de produtor por CPF"
     },
     "/properties/{propertyId}": {
       "schema": "Property",
@@ -148,6 +198,30 @@
     "/field_events/{eventId}": {
       "schema": "FieldEvent",
       "description": "Histórico append-only de eventos de manejo e campo"
+    },
+    "/satellite_scenes/{sceneId}": {
+      "schema": "SatelliteScene",
+      "description": "Cenas de satélite reais adquiridas para os talhões"
+    },
+    "/plot_satellite_metrics/{metricId}": {
+      "schema": "PlotSatelliteMetric",
+      "description": "Séries de NDVI e vigor vegetal calculadas por talhão"
+    },
+    "/weather_snapshots/{propertyId}": {
+      "schema": "WeatherSnapshot",
+      "description": "Último snapshot do clima e evapotranspiração da fazenda"
+    },
+    "/irrigation_assessments/{plotId}": {
+      "schema": "IrrigationAssessment",
+      "description": "Balanço hídrico diário e necessidade de irrigação por talhão (Volume 09)"
+    },
+    "/phenology_events/{plotId}": {
+      "schema": "CoffeePhenologyAssessment",
+      "description": "Estágio fenológico e janela de florada do café (Volume 07)"
+    },
+    "/pasture_managements/{plotId}": {
+      "schema": "PastureManagementAssessment",
+      "description": "Controle de pastejo, corte e descanso de capim (Volume 08)"
     }
   }
 }

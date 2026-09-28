@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { Leaf, BookOpen, Layers, Plus } from 'lucide-react';
+import { Leaf, BookOpen, Layers, Plus, LogOut } from 'lucide-react';
 import { OfflineStore, generateUUID, getOrCreateDeviceSessionId } from './offline/store';
 import { ProducerProfile, Property, Plot, FieldEvent, ActivityProfile, CoffeeSubtype, GeoPoint } from './domain/entities';
 import { FirestoreSyncService } from './services/firestoreSync';
@@ -100,7 +100,6 @@ export default function App() {
       cpf: data.cpf,
       phone: data.phone,
     });
-    FirestoreSyncService.saveProducerProfile(newProducer);
 
     // 2. Salvar propriedade
     const propertyId = generateUUID();
@@ -116,9 +115,10 @@ export default function App() {
     OfflineStore.saveProperty(newProperty);
 
     // 3. Salvar primeiro talhão se desenhado
+    let newPlot: Plot | undefined = undefined;
     if (data.initialPlotPolygon && data.initialPlotPolygon.length >= 3) {
       const plotId = generateUUID();
-      const newPlot: Plot = {
+      newPlot = {
         id: plotId,
         propertyId: newProperty.id,
         name: data.initialPlotName || 'Talhão 1',
@@ -141,6 +141,13 @@ export default function App() {
       OfflineStore.savePlot(newPlot);
     }
 
+    // Grava de forma completa e imediata no Firebase (coleções e producers_by_cpf)
+    FirestoreSyncService.saveFullRegistration({
+      producer: newProducer,
+      property: newProperty,
+      plot: newPlot,
+    });
+
     setIsRegistering(false);
     loadLocalData();
     FirestoreSyncService.drainMutationQueue().then(() => loadLocalData());
@@ -150,7 +157,10 @@ export default function App() {
   const handleSavePlot = (plot: Plot) => {
     OfflineStore.savePlot(plot);
     loadLocalData();
-    FirestoreSyncService.drainMutationQueue().then(() => loadLocalData());
+    FirestoreSyncService.savePlotDirect(plot, producer, activeProperty).then(() => {
+      loadLocalData();
+    });
+    FirestoreSyncService.drainMutationQueue();
   };
 
   // Salvar evento no caderno de campo
@@ -160,7 +170,7 @@ export default function App() {
     FirestoreSyncService.drainMutationQueue().then(() => loadLocalData());
   };
 
-  // Trocar de produtor / Sair para tela de CPF
+  // Sair do portal e voltar imediatamente para a tela de login ou cadastro
   const handleLogout = () => {
     localStorage.removeItem('agro_producer_profile');
     setProducer(null);
@@ -203,26 +213,26 @@ export default function App() {
               className="hover:text-[#173F2A] transition cursor-pointer flex items-center gap-1.5"
             >
               <BookOpen className="w-3.5 h-3.5 text-[#2F7D4A]" />
-              <span>Livro Raiz & Manual</span>
+              <span>Livro Raiz e Manual</span>
             </button>
             <span className="text-stone-300">|</span>
             <span>Versão 1.0 (Firebase)</span>
-            {producer && (
-              <>
-                <span className="text-stone-300">|</span>
-                <button
-                  onClick={handleLogout}
-                  className="hover:text-[#B7372E] text-[#6B4A35] transition cursor-pointer"
-                >
-                  Trocar Produtor
-                </button>
-              </>
-            )}
           </div>
 
-          {/* Zone 3: Primary Actions (Offline Indicator + PWA Install) */}
-          <div className="flex items-center gap-3">
+          {/* Zone 3: Primary Actions (Offline Indicator + Sair + PWA Install) */}
+          <div className="flex items-center gap-2.5">
             <OfflineIndicator pendingMutationsCount={pendingCount} />
+            {producer && (
+              <button
+                type="button"
+                onClick={handleLogout}
+                className="px-2.5 py-1.5 rounded-xl text-xs font-bold text-[#B7372E] bg-red-50 hover:bg-red-100 border border-red-200/80 transition-colors flex items-center gap-1.5 cursor-pointer shadow-2xs active:scale-95"
+                title="Sair do portal e voltar para a tela inicial"
+              >
+                <LogOut className="w-3.5 h-3.5" />
+                <span>Sair</span>
+              </button>
+            )}
             <PWAInstallButton />
           </div>
         </div>
