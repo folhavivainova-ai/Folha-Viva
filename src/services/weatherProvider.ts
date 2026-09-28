@@ -4,8 +4,6 @@
  * Inclui cálculo de ET0 e precipitação acumulada para balanço hídrico.
  */
 
-import { doc, setDoc } from 'firebase/firestore';
-import { db } from '../lib/firebase';
 import { WeatherDataPoint } from '../domain/entities';
 
 export interface WeatherSummary {
@@ -22,9 +20,8 @@ const WEATHER_CACHE_KEY = 'agro_weather_cache';
 export class WeatherService {
   /**
    * Busca clima real pelas coordenadas do centroid da propriedade ou talhão.
-   * Persiste no Firebase Firestore (Volume 05 - Clima e Evapotranspiração).
    */
-  static async fetchWeather(lat: number, lng: number, propertyId?: string): Promise<WeatherSummary> {
+  static async fetchWeather(lat: number, lng: number): Promise<WeatherSummary> {
     try {
       const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current=temperature_2m,relative_humidity_2m,precipitation,weather_code,wind_speed_10m&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,et0_fao_evapotranspiration&timezone=auto&past_days=7`;
 
@@ -83,20 +80,6 @@ export class WeatherService {
 
       // Salva no cache local para resiliência offline (V05-E04)
       localStorage.setItem(WEATHER_CACHE_KEY, JSON.stringify(summary));
-
-      // Persistência no Firebase Firestore (Volume 05)
-      if (propertyId) {
-        try {
-          await setDoc(doc(db, 'weather_snapshots', propertyId), {
-            ...summary,
-            propertyId,
-            savedAt: new Date().toISOString(),
-          });
-        } catch (firebaseErr) {
-          console.warn('Erro ao salvar snapshot meteorológico no Firebase:', firebaseErr);
-        }
-      }
-
       return summary;
     } catch (err) {
       // Degradação graciosa offline

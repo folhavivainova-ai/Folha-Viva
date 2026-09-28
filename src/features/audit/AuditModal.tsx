@@ -24,7 +24,7 @@ export const AuditModal: React.FC<AuditModalProps> = ({
           <div>
             <h3 className="text-base sm:text-lg font-bold text-[#173F2A] flex items-center gap-2">
               <BookOpen className="w-5 h-5 text-[#2F7D4A]" />
-              <span>Auditoria Técnica e Livro Raiz</span>
+              <span>Auditoria Técnica & Livro Raiz</span>
             </h3>
             <p className="text-xs text-[#6B4A35]">
               Volume 00-E03: Norma de projeto, governança e conformidade
@@ -68,7 +68,7 @@ export const AuditModal: React.FC<AuditModalProps> = ({
                 : 'border-transparent text-stone-500 hover:text-stone-800'
             }`}
           >
-            Contratos e Banco
+            Contratos & Banco
           </button>
           <button
             onClick={() => setActiveTab('seguranca')}
@@ -99,7 +99,7 @@ export const AuditModal: React.FC<AuditModalProps> = ({
                   <div><strong>Data:</strong> 27/09/2026</div>
                   <div><strong>Versão:</strong> 1.0 Canônica</div>
                   <div><strong>Dados fictícios:</strong> Nenhum (Estrutura pura)</div>
-                  <div><strong>Offline:</strong> Ativo via PWA e Armazenamento Local</div>
+                  <div><strong>Offline:</strong> Ativo via PWA & Store Local</div>
                 </div>
                 <p className="text-[11px] text-stone-600 leading-relaxed border-t border-stone-100 pt-2">
                   Implementação inicial completa sem criação de dados simulados. A plataforma inicia em estado limpo com formulário de cadastro real (produtor, propriedade, GPS e talhão desenhado) e visualização de clima real via API aberta sem chaves.
@@ -122,28 +122,24 @@ export const AuditModal: React.FC<AuditModalProps> = ({
 
           {activeTab === 'contratos' && (
             <div className="space-y-2.5 bg-white p-4 rounded-xl border border-[#D8C4A8]/40">
-              <div className="flex items-center justify-between pb-2 border-b border-stone-100">
-                <h4 className="font-bold text-sm text-[#173F2A]">Banco de Dados Ativo</h4>
-                <span className="text-[11px] font-semibold text-[#2F7D4A] bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
-                  Provisionado na Nuvem
-                </span>
-              </div>
-              <div className="p-2.5 rounded-lg bg-stone-50 border border-stone-200 text-[11px] space-y-1 text-stone-700">
-                <div><strong>Projeto GCP:</strong> <code>gen-lang-client-0815660984</code></div>
-                <div><strong>Região:</strong> <code>us-east1</code></div>
-                <div><strong>ID do Banco:</strong> <code className="text-[#2F7D4A]">ai-studio-folhaviva-bcbe6de4-6fb7-4087-8be0-5a49bfd455f9</code></div>
-                <div><strong>Segurança:</strong> Regras ABAC + Default-Deny implantadas</div>
-              </div>
-              <h5 className="font-semibold text-xs text-[#173F2A] pt-2">Esquema Canônico e Migrações</h5>
+              <h4 className="font-bold text-sm text-[#173F2A]">Esquema Canônico PostGIS</h4>
+              <p className="text-stone-600">
+                O arquivo de migração versionado está criado em:
+                <br /><code className="text-[#2F7D4A] font-mono">/supabase/migrations/20260920000000_v01_initial_canonical_schema.sql</code>
+              </p>
               <div className="grid grid-cols-2 gap-2 font-mono text-[10px] text-stone-700 bg-stone-50 p-2.5 rounded-lg border border-stone-200">
-                <div>• producers</div>
+                <div>• producer_profiles</div>
                 <div>• properties</div>
                 <div>• plots (Polygon 4326)</div>
-                <div>• field_events (append-only)</div>
                 <div>• crop_cycles</div>
+                <div>• field_events</div>
+                <div>• field_photos</div>
                 <div>• satellite_scenes</div>
+                <div>• plot_satellite_metrics</div>
                 <div>• weather_series</div>
                 <div>• irrigation_assessments</div>
+                <div>• flowering_assessments</div>
+                <div>• carbon_estimates</div>
               </div>
             </div>
           )}

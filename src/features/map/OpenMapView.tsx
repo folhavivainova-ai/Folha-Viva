@@ -21,19 +21,19 @@ const MAP_LAYERS = {
   satellite: {
     name: 'Satélite',
     url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-    attribution: 'Tiles © Esri — Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community',
+    attribution: 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community',
     maxZoom: 18,
   },
   streets: {
     name: 'Mapa Padrão',
     url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-    attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
     maxZoom: 19,
   },
   topo: {
     name: 'Relevo',
     url: 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
-    attribution: 'Map data: © <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>, <a href="http://viewfinderpanoramas.org">SRTM</a>',
+    attribution: 'Map data: &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>, <a href="http://viewfinderpanoramas.org">SRTM</a>',
     maxZoom: 17,
   },
 };
@@ -83,8 +83,6 @@ export const OpenMapView: React.FC<OpenMapViewProps> = ({
   const [isLocating, setIsLocating] = useState(false);
   const [locationError, setLocationError] = useState<string | null>(null);
 
-  const locationMarkerRef = useRef<L.Marker | null>(null);
-
   // Inicializar o Mapa Leaflet
   useEffect(() => {
     if (!mapContainerRef.current || mapInstanceRef.current) return;
@@ -119,30 +117,6 @@ export const OpenMapView: React.FC<OpenMapViewProps> = ({
       mapInstanceRef.current = null;
     };
   }, []);
-
-  // Atualizar centro do mapa quando coordenadas mudarem (GPS ou escolha)
-  useEffect(() => {
-    if (!mapInstanceRef.current || !center) return;
-    mapInstanceRef.current.setView(center, zoom || mapInstanceRef.current.getZoom());
-
-    // Se tiver onLocationFound, atualizar o marcador de localização
-    if (onLocationFound && center[0] !== -20.0 && center[1] !== -44.0) {
-      if (locationMarkerRef.current) {
-        locationMarkerRef.current.setLatLng(center);
-      } else {
-        const marker = L.marker(center, {
-          icon: L.divIcon({
-            className: 'custom-farm-pin',
-            html: `<div style="background-color:#2F7D4A;width:24px;height:24px;border-radius:50%;border:3px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.3);display:flex;align-items:center;justify-content:center;color:white;font-size:12px;">🌱</div>`,
-            iconSize: [24, 24],
-            iconAnchor: [12, 12],
-          }),
-        }).addTo(mapInstanceRef.current);
-        marker.bindTooltip('Sede da Propriedade', { permanent: false, direction: 'top' });
-        locationMarkerRef.current = marker;
-      }
-    }
-  }, [center?.[0], center?.[1], zoom]);
 
   // Trocar camada de fundo (V03-E04)
   useEffect(() => {
@@ -203,35 +177,32 @@ export const OpenMapView: React.FC<OpenMapViewProps> = ({
     }
   }, [plots, selectedPlotId, isDrawingPlot]);
 
-  // Listener de Clique no Mapa (Desenho de Talhão ou Marcação de Sede da Fazenda)
+  // Listener de Clique para Desenho de Talhão (V03-E02)
   useEffect(() => {
     if (!mapInstanceRef.current) return;
     const map = mapInstanceRef.current;
 
     const handleMapClick = (e: L.LeafletMouseEvent) => {
-      if (isDrawingPlot) {
-        const newPoint: [number, number] = [e.latlng.lat, e.latlng.lng];
-        setDrawingPoints((prev) => [...prev, newPoint]);
-      } else if (onLocationFound) {
-        // Marca o local da fazenda ao clicar no mapa
-        onLocationFound({
-          lat: Number(e.latlng.lat.toFixed(6)),
-          lng: Number(e.latlng.lng.toFixed(6)),
-          accuracyMeters: 10,
-        });
-      }
+      if (!isDrawingPlot) return;
+
+      const newPoint: [number, number] = [e.latlng.lat, e.latlng.lng];
+      setDrawingPoints((prev) => {
+        const next = [...prev, newPoint];
+        return next;
+      });
     };
 
-    map.on('click', handleMapClick);
-
-    if (!isDrawingPlot) {
+    if (isDrawingPlot) {
+      map.on('click', handleMapClick);
+    } else {
+      map.off('click', handleMapClick);
       setDrawingPoints([]);
     }
 
     return () => {
       map.off('click', handleMapClick);
     };
-  }, [isDrawingPlot, onLocationFound]);
+  }, [isDrawingPlot]);
 
   // Atualizar visualização do desenho em andamento
   useEffect(() => {
@@ -481,12 +452,12 @@ export const OpenMapView: React.FC<OpenMapViewProps> = ({
             onClick={() => setLocationError(null)}
             className="text-stone-500 font-bold hover:text-stone-800 ml-2"
           >
-            ✕
+            &times;
           </button>
         </div>
       )}
 
-      {/* Legenda de Satélite e Qualidade (V04-E04) */}
+      {/* Legenda de Satélite & Qualidade (V04-E04) */}
       <div className="absolute bottom-3 right-3 z-20 pointer-events-none">
         <span className="px-2 py-0.5 rounded bg-black/60 text-white text-[10px] backdrop-blur-xs font-mono">
           Sentinel / Esri Open Tiles
