@@ -1,0 +1,153 @@
+{
+  "entities": {
+    "ProducerProfile": {
+      "title": "ProducerProfile",
+      "description": "Perfil técnico do produtor rural (V02 sem login, migrável para V19).",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "ID canônico do produtor"
+        },
+        "deviceSessionId": {
+          "type": "string",
+          "description": "Identificador da sessão do aparelho"
+        },
+        "displayName": {
+          "type": "string",
+          "maxLength": 120,
+          "description": "Nome do produtor"
+        },
+        "cpf": {
+          "type": "string",
+          "maxLength": 14,
+          "description": "CPF validado do produtor (com ou sem formatação)"
+        },
+        "phone": {
+          "type": "string",
+          "maxLength": 20,
+          "description": "Telefone ou celular do produtor formatado"
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Data de criação ISO 8601"
+        }
+      },
+      "required": ["id", "deviceSessionId", "displayName", "createdAt"]
+    },
+    "Property": {
+      "title": "Property",
+      "description": "Propriedade agrícola (fazenda, sítio)",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "ID canônico da propriedade"
+        },
+        "producerId": {
+          "type": "string",
+          "description": "ID do produtor proprietário"
+        },
+        "name": {
+          "type": "string",
+          "maxLength": 150,
+          "description": "Nome da fazenda ou sítio"
+        },
+        "activityProfile": {
+          "type": "string",
+          "enum": ["coffee", "pasture", "mixed"],
+          "description": "Perfil de atividade agrícola"
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Timestamp de cadastro"
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "Timestamp de atualização"
+        }
+      },
+      "required": ["id", "producerId", "name", "activityProfile", "createdAt"]
+    },
+    "Plot": {
+      "title": "Plot",
+      "description": "Talhão agrícola com geometria e cultura",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "ID canônico do talhão"
+        },
+        "propertyId": {
+          "type": "string",
+          "description": "ID da propriedade vinculada"
+        },
+        "name": {
+          "type": "string",
+          "maxLength": 100,
+          "description": "Nome do talhão"
+        },
+        "areaHa": {
+          "type": "number",
+          "description": "Área do talhão em hectares"
+        },
+        "active": {
+          "type": "boolean",
+          "description": "Se o talhão está ativo"
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Timestamp de criação"
+        }
+      },
+      "required": ["id", "propertyId", "name", "areaHa", "active", "createdAt"]
+    },
+    "FieldEvent": {
+      "title": "FieldEvent",
+      "description": "Evento de manejo, irrigação, corte ou ocorrência de campo (append-only)",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "ID único do evento"
+        },
+        "plotId": {
+          "type": "string",
+          "description": "ID do talhão"
+        },
+        "type": {
+          "type": "string",
+          "enum": ["irrigation", "pasture_cut", "grazing_in", "grazing_out", "inspection", "occurrence", "note", "flowering_observed"],
+          "description": "Tipo do evento"
+        },
+        "occurredAt": {
+          "type": "string",
+          "description": "Data e hora em que ocorreu"
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Data de registro"
+        }
+      },
+      "required": ["id", "plotId", "type", "occurredAt", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/producers/{producerId}": {
+      "schema": "ProducerProfile",
+      "description": "Coleção de perfis técnicos dos produtores"
+    },
+    "/properties/{propertyId}": {
+      "schema": "Property",
+      "description": "Coleção de propriedades rurais cadastradas"
+    },
+    "/plots/{plotId}": {
+      "schema": "Plot",
+      "description": "Coleção de talhões agrícolas com geometria"
+    },
+    "/field_events/{eventId}": {
+      "schema": "FieldEvent",
+      "description": "Histórico append-only de eventos de manejo e campo"
+    }
+  }
+}

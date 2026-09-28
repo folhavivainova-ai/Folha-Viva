@@ -7,6 +7,7 @@ import React, { useState, useEffect } from 'react';
 import { Leaf, BookOpen, Layers, Plus } from 'lucide-react';
 import { OfflineStore, generateUUID, getOrCreateDeviceSessionId } from './offline/store';
 import { ProducerProfile, Property, Plot, FieldEvent, ActivityProfile, CoffeeSubtype, GeoPoint } from './domain/entities';
+import { FirestoreSyncService } from './services/firestoreSync';
 import { OnboardingWizard } from './features/onboarding/OnboardingWizard';
 import { ProducerDashboard } from './features/dashboard/ProducerDashboard';
 import { FieldNotebookModal } from './features/field/FieldNotebookModal';
@@ -14,6 +15,7 @@ import { NewPlotModal } from './features/field/NewPlotModal';
 import { AuditModal } from './features/audit/AuditModal';
 import { PWAInstallButton } from './components/ui/PWAInstallButton';
 import { OfflineIndicator } from './components/ui/OfflineIndicator';
+import { AuthWelcomeScreen } from './features/auth/AuthWelcomeScreen';
 
 export default function App() {
   const [deviceSessionId, setDeviceSessionId] = useState<string>('');
@@ -22,6 +24,8 @@ export default function App() {
   const [plots, setPlots] = useState<Plot[]>([]);
   const [events, setEvents] = useState<FieldEvent[]>([]);
   const [pendingCount, setPendingCount] = useState<number>(0);
+  const [isRegistering, setIsRegistering] = useState<boolean>(false);
+  const [prefilledAuthData, setPrefilledAuthData] = useState<{ cpf?: string; phone?: string } | undefined>(undefined);
 
   // Modais
   const [isFieldNotebookOpen, setIsFieldNotebookOpen] = useState(false);
@@ -35,6 +39,15 @@ export default function App() {
     setDeviceSessionId(session);
 
     loadLocalData();
+
+    // Drena mutações pendentes na inicialização e quando a rede voltar
+    FirestoreSyncService.drainMutationQueue().then(() => loadLocalData());
+
+    const handleOnline = () => {
+      FirestoreSyncService.drainMutationQueue().then(() => loadLocalData());
+    };
+    window.addEventListener('online', handleOnline);
+    return () => window.removeEventListener('online', handleOnline);
   }, []);
 
   const loadLocalData = () => {
@@ -51,10 +64,27 @@ export default function App() {
     setPendingCount(queue.filter((m) => m.status === 'pending').length);
   };
 
+  // Sucesso no Login por CPF
+  const handleLoginSuccess = (data: {
+    producer: ProducerProfile;
+    properties: Property[];
+    plots: Plot[];
+    events: FieldEvent[];
+  }) => {
+    OfflineStore.restoreSessionData(data);
+    setProducer(data.producer);
+    setProperties(data.properties);
+    setPlots(data.plots);
+    setEvents(data.events);
+    setIsRegistering(false);
+  };
+
   // Conclusão do Onboarding Inicial Real (Apêndice I)
   const handleOnboardingComplete = (data: {
     producerName: string;
     propertyName: string;
+    cpf?: string;
+    phone?: string;
     activityProfile: ActivityProfile;
     coffeeSubtype?: CoffeeSubtype;
     coffeeCultivar?: string;
@@ -65,7 +95,12 @@ export default function App() {
     initialPlotName?: string;
   }) => {
     // 1. Salvar perfil do produtor
-    const newProducer = OfflineStore.saveProducerProfile(data.producerName);
+    const newProducer = OfflineStore.saveProducerProfile({
+      displayName: data.producerName,
+      cpf: data.cpf,
+      phone: data.phone,
+    });
+    FirestoreSyncService.saveProducerProfile(newProducer);
 
     // 2. Salvar propriedade
     const propertyId = generateUUID();
@@ -106,26 +141,41 @@ export default function App() {
       OfflineStore.savePlot(newPlot);
     }
 
+    setIsRegistering(false);
     loadLocalData();
+    FirestoreSyncService.drainMutationQueue().then(() => loadLocalData());
   };
 
   // Salvar novo talhão avulso
   const handleSavePlot = (plot: Plot) => {
     OfflineStore.savePlot(plot);
     loadLocalData();
+    FirestoreSyncService.drainMutationQueue().then(() => loadLocalData());
   };
 
   // Salvar evento no caderno de campo
   const handleSaveFieldEvent = (event: FieldEvent) => {
     OfflineStore.saveFieldEvent(event);
     loadLocalData();
+    FirestoreSyncService.drainMutationQueue().then(() => loadLocalData());
+  };
+
+  // Trocar de produtor / Sair para tela de CPF
+  const handleLogout = () => {
+    localStorage.removeItem('agro_producer_profile');
+    setProducer(null);
+    setProperties([]);
+    setPlots([]);
+    setEvents([]);
+    setIsRegistering(false);
   };
 
   // Reset para demonstração / homologação limpa
   const handleResetData = () => {
-    if (window.confirm('Deseja limpar todos os dados cadastrados neste aparelho e reiniciar o onboarding?')) {
+    if (window.confirm('Deseja limpar todos os dados cadastrados neste aparelho e reiniciar o acesso?')) {
       OfflineStore.clearDatabase();
       loadLocalData();
+      setIsRegistering(false);
     }
   };
 
@@ -156,7 +206,18 @@ export default function App() {
               <span>Livro Raiz & Manual</span>
             </button>
             <span className="text-stone-300">|</span>
-            <span>Versão 1.0 (Canônica)</span>
+            <span>Versão 1.0 (Firebase)</span>
+            {producer && (
+              <>
+                <span className="text-stone-300">|</span>
+                <button
+                  onClick={handleLogout}
+                  className="hover:text-[#B7372E] text-[#6B4A35] transition cursor-pointer"
+                >
+                  Trocar Produtor
+                </button>
+              </>
+            )}
           </div>
 
           {/* Zone 3: Primary Actions (Offline Indicator + PWA Install) */}
@@ -170,7 +231,21 @@ export default function App() {
       {/* Main Content Viewport */}
       <main className="flex-1 max-w-6xl w-full mx-auto p-4 sm:p-6">
         {!producer || !activeProperty ? (
-          <OnboardingWizard onComplete={handleOnboardingComplete} />
+          isRegistering ? (
+            <OnboardingWizard
+              initialData={prefilledAuthData}
+              onCancel={() => setIsRegistering(false)}
+              onComplete={handleOnboardingComplete}
+            />
+          ) : (
+            <AuthWelcomeScreen
+              onLoginSuccess={handleLoginSuccess}
+              onStartRegistration={(initial) => {
+                setPrefilledAuthData(initial);
+                setIsRegistering(true);
+              }}
+            />
+          )
         ) : (
           <ProducerDashboard
             producer={producer}

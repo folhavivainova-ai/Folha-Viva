@@ -1,0 +1,95 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Default-deny catch-all (Pillar 1 / Global Safety Net)
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // Producer Profiles
+    match /producers/{producerId} {
+      allow read: if true;
+      allow create: if isValidId(producerId)
+        && incoming().id == producerId
+        && incoming().displayName is string
+        && incoming().displayName.size() > 0
+        && incoming().displayName.size() <= 120
+        && incoming().deviceSessionId is string
+        && incoming().deviceSessionId.size() <= 128
+        && incoming().createdAt is string;
+      allow update: if isValidId(producerId)
+        && incoming().id == existing().id
+        && incoming().deviceSessionId == existing().deviceSessionId
+        && incoming().displayName is string
+        && incoming().displayName.size() > 0
+        && incoming().displayName.size() <= 120;
+    }
+
+    // Properties
+    match /properties/{propertyId} {
+      allow read: if isValidId(propertyId);
+      allow create: if isValidId(propertyId)
+        && incoming().id == propertyId
+        && incoming().producerId is string
+        && incoming().name is string
+        && incoming().name.size() > 0
+        && incoming().name.size() <= 150
+        && incoming().activityProfile in ['coffee', 'pasture', 'mixed']
+        && incoming().createdAt is string;
+      allow update: if isValidId(propertyId)
+        && incoming().id == existing().id
+        && incoming().producerId == existing().producerId
+        && incoming().name is string
+        && incoming().name.size() > 0
+        && incoming().name.size() <= 150
+        && incoming().activityProfile in ['coffee', 'pasture', 'mixed'];
+      allow delete: if isValidId(propertyId);
+    }
+
+    // Plots
+    match /plots/{plotId} {
+      allow read: if isValidId(plotId);
+      allow create: if isValidId(plotId)
+        && incoming().id == plotId
+        && incoming().propertyId is string
+        && incoming().name is string
+        && incoming().name.size() > 0
+        && incoming().name.size() <= 100
+        && incoming().areaHa is number
+        && incoming().active is bool
+        && incoming().createdAt is string;
+      allow update: if isValidId(plotId)
+        && incoming().id == existing().id
+        && incoming().propertyId == existing().propertyId
+        && incoming().name is string
+        && incoming().name.size() > 0
+        && incoming().name.size() <= 100;
+      allow delete: if isValidId(plotId);
+    }
+
+    // Field Events (append-only)
+    match /field_events/{eventId} {
+      allow read: if isValidId(eventId);
+      allow create: if isValidId(eventId)
+        && incoming().id == eventId
+        && incoming().plotId is string
+        && incoming().type in ['irrigation', 'pasture_cut', 'grazing_in', 'grazing_out', 'inspection', 'occurrence', 'note', 'flowering_observed']
+        && incoming().occurredAt is string
+        && incoming().createdAt is string;
+      allow update: if false; // Append-only by design
+      allow delete: if false;
+    }
+  }
+}

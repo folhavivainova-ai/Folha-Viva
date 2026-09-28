@@ -56,18 +56,41 @@ export class OfflineStore {
   }
 
   // Salvar perfil do produtor
-  static saveProducerProfile(displayName: string): ProducerProfile {
+  static saveProducerProfile(data: { displayName: string; cpf?: string; phone?: string } | string): ProducerProfile {
+    const displayName = typeof data === 'string' ? data : data.displayName;
+    const cpf = typeof data === 'object' ? data.cpf : undefined;
+    const phone = typeof data === 'object' ? data.phone : undefined;
+
     const deviceSessionId = getOrCreateDeviceSessionId();
     const existing = this.getProducerProfile();
     const profile: ProducerProfile = {
       id: existing ? existing.id : generateUUID(),
       deviceSessionId,
       displayName: displayName.trim(),
+      cpf: cpf?.trim(),
+      phone: phone?.trim(),
       createdAt: existing ? existing.createdAt : new Date().toISOString(),
     };
     localStorage.setItem(STORAGE_KEYS.PRODUCER, JSON.stringify(profile));
     this.enqueueMutation('insert', 'property', profile as unknown as Record<string, unknown>);
     return profile;
+  }
+
+  // Definir perfil do produtor e restaurar dados ao logar por CPF
+  static setProducerProfile(profile: ProducerProfile): void {
+    localStorage.setItem(STORAGE_KEYS.PRODUCER, JSON.stringify(profile));
+  }
+
+  static restoreSessionData(data: {
+    producer: ProducerProfile;
+    properties: Property[];
+    plots: Plot[];
+    events: FieldEvent[];
+  }): void {
+    localStorage.setItem(STORAGE_KEYS.PRODUCER, JSON.stringify(data.producer));
+    localStorage.setItem(STORAGE_KEYS.PROPERTIES, JSON.stringify(data.properties));
+    localStorage.setItem(STORAGE_KEYS.PLOTS, JSON.stringify(data.plots));
+    localStorage.setItem(STORAGE_KEYS.EVENTS, JSON.stringify(data.events));
   }
 
   // Obter propriedades do produtor (Array vazio por padrão, sem dados fictícios)

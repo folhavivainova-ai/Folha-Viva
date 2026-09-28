@@ -35,8 +35,17 @@ export interface ProducerProfile {
   id: string;
   deviceSessionId: string;
   displayName: string;
+  cpf?: string;
+  phone?: string;
   createdAt: string;
 }
+
+// Volume 00-E01: Feature flags e limites da V1
+export const V1_FEATURE_FLAGS = {
+  ALLOW_ONLY_COFFEE_AND_PASTURE: true,
+  ALLOW_FLOWERS_MODULE_ONLY_COFFEE: true,
+  ALLOW_FUTURE_EXPANSION_CROPS: false,
+} as const;
 
 export interface Property {
   id: string;

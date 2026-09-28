@@ -1,14 +1,22 @@
 import React, { useState } from 'react';
-import { Leaf, MapPin, Check, ArrowRight, ShieldCheck, Sprout } from 'lucide-react';
+import { Leaf, MapPin, Check, ArrowRight, ShieldCheck, Sprout, CheckCircle2, AlertCircle } from 'lucide-react';
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
 import { OpenMapView } from '../map/OpenMapView';
 import { ActivityProfile, CoffeeSubtype, GeoPoint } from '../../domain/entities';
+import { formatCPF, isValidCPF, formatPhone, stripNonDigits } from '../../utils/cpfValidator';
 
 interface OnboardingWizardProps {
+  initialData?: {
+    cpf?: string;
+    phone?: string;
+  };
+  onCancel?: () => void;
   onComplete: (data: {
     producerName: string;
     propertyName: string;
+    cpf?: string;
+    phone?: string;
     activityProfile: ActivityProfile;
     coffeeSubtype?: CoffeeSubtype;
     coffeeCultivar?: string;
@@ -20,8 +28,14 @@ interface OnboardingWizardProps {
   }) => void;
 }
 
-export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({ onComplete }) => {
-  const [step, setStep] = useState<number>(0);
+export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
+  initialData,
+  onCancel,
+  onComplete,
+}) => {
+  const [step, setStep] = useState<number>(1);
+  const [cpf, setCpf] = useState(initialData?.cpf ? formatCPF(initialData.cpf) : '');
+  const [phone, setPhone] = useState(initialData?.phone ? formatPhone(initialData.phone) : '');
   const [producerName, setProducerName] = useState('');
   const [propertyName, setPropertyName] = useState('');
   const [activityProfile, setActivityProfile] = useState<ActivityProfile>('coffee');
@@ -37,6 +51,18 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({ onComplete }
   const [plotName, setPlotName] = useState('Talhão 1');
   const [plotCoords, setPlotCoords] = useState<[number, number][]>([]);
   const [plotAreaHa, setPlotAreaHa] = useState<number>(0);
+
+  const cleanCpf = stripNonDigits(cpf);
+  const isCpfValid = cleanCpf.length === 11 && isValidCPF(cpf);
+  const isCpfComplete = cleanCpf.length === 11;
+
+  const handleCpfChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setCpf(formatCPF(e.target.value));
+  };
+
+  const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setPhone(formatPhone(e.target.value));
+  };
 
   const handleUseGPS = () => {
     if (!navigator.geolocation) {
@@ -75,6 +101,8 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({ onComplete }
     onComplete({
       producerName: producerName.trim() || 'Produtor',
       propertyName: propertyName.trim() || 'Minha Fazenda',
+      cpf: cpf.trim() || undefined,
+      phone: phone.trim() || undefined,
       activityProfile,
       coffeeSubtype: activityProfile !== 'pasture' ? coffeeSubtype : undefined,
       coffeeCultivar: coffeeCultivar.trim() || undefined,
@@ -88,92 +116,116 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({ onComplete }
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-8">
-      {/* Etapa 0: Abertura Direta (Apêndice I - Passo 1) */}
-      {step === 0 && (
-        <div className="text-center py-6 space-y-6">
-          <div className="w-20 h-20 mx-auto rounded-3xl bg-[#2F7D4A]/10 text-[#2F7D4A] flex items-center justify-center border border-[#2F7D4A]/20 shadow-xs">
-            <Leaf className="w-10 h-10" />
-          </div>
-
-          <div className="space-y-2">
-            <h1 className="text-2xl sm:text-3xl font-bold text-[#173F2A] tracking-tight">
-              Folha Viva
-            </h1>
-            <p className="text-sm font-semibold uppercase tracking-wider text-[#2F7D4A]">
-              Monitoramento Agrícola Inteligente
-            </p>
-            <p className="text-sm sm:text-base text-[#6B4A35] max-w-md mx-auto leading-relaxed">
-              Transforme observações de campo, satélite e clima em decisões simples para sua lavoura.
-            </p>
-          </div>
-
-          <div className="bg-white/80 border border-[#D8C4A8]/40 rounded-2xl p-4 max-w-md mx-auto text-left text-xs text-[#6B4A35] space-y-2">
-            <div className="flex items-center gap-2 text-[#173F2A] font-semibold text-sm">
-              <ShieldCheck className="w-4 h-4 text-[#2F7D4A]" />
-              <span>Sem senha e sem login</span>
-            </div>
-            <p>
-              Inicie direto no seu celular ou computador. Seus dados ficam salvos com segurança no aparelho e sincronizam quando houver internet.
-            </p>
-          </div>
-
-          <div className="pt-4">
-            <Button
-              size="large"
-              onClick={() => setStep(1)}
-              className="w-full sm:w-auto px-10 text-base"
-              icon={<ArrowRight className="w-5 h-5" />}
-            >
-              Começar
-            </Button>
-          </div>
-        </div>
-      )}
-
-      {/* Etapa 1: Nome do Produtor e Propriedade (Passos 2 e 3) */}
+      {/* Etapa 1: Dados do Produtor (CPF, Telefone, Nome, Fazenda) */}
       {step === 1 && (
-        <Card title="Como podemos te chamar?">
-          <div className="space-y-5 pt-2">
+        <Card title="Cadastro do Produtor & Propriedade">
+          <div className="space-y-4 pt-2">
+            <p className="text-xs text-[#6B4A35] leading-relaxed">
+              Preencha os dados de identificação para acessar seu monitoramento a qualquer momento por CPF.
+            </p>
+
+            {/* Campo CPF com Máscara e Validação Algorítmica */}
             <div>
-              <label className="block text-sm font-semibold text-[#173F2A] mb-2">
-                Seu nome ou como prefere ser chamado:
+              <label htmlFor="producer-cpf" className="block text-xs font-bold text-[#173F2A] uppercase tracking-wide mb-1">
+                CPF do Produtor:
+              </label>
+              <div className="relative">
+                <input
+                  id="producer-cpf"
+                  type="tel"
+                  inputMode="numeric"
+                  value={cpf}
+                  onChange={handleCpfChange}
+                  placeholder="000.000.000-00"
+                  maxLength={14}
+                  className="w-full h-11 px-3.5 rounded-xl border border-[#D8C4A8] bg-white text-sm text-[#173F2A] font-mono tracking-wider focus:outline-none focus:border-[#2F7D4A] focus:ring-1 focus:ring-[#2F7D4A]"
+                  autoFocus
+                />
+                {isCpfComplete && (
+                  <div className="absolute right-3 top-3">
+                    {isCpfValid ? (
+                      <CheckCircle2 className="w-5 h-5 text-[#2F7D4A]" />
+                    ) : (
+                      <AlertCircle className="w-5 h-5 text-[#B7372E]" />
+                    )}
+                  </div>
+                )}
+              </div>
+              <div className="mt-1 text-[11px]">
+                {isCpfComplete && !isCpfValid && (
+                  <span className="text-[#B7372E] font-medium flex items-center gap-1">
+                    <AlertCircle className="w-3 h-3 shrink-0" /> CPF inválido (dígitos verificadores incorretos).
+                  </span>
+                )}
+                {isCpfValid && (
+                  <span className="text-[#2F7D4A] font-medium flex items-center gap-1">
+                    <CheckCircle2 className="w-3 h-3 shrink-0" /> CPF válido verificado.
+                  </span>
+                )}
+              </div>
+            </div>
+
+            {/* Campo Telefone com Máscara (00) 0 0000-0000 */}
+            <div>
+              <label htmlFor="producer-phone" className="block text-xs font-bold text-[#173F2A] uppercase tracking-wide mb-1">
+                Telefone / Celular:
               </label>
               <input
+                id="producer-phone"
+                type="tel"
+                inputMode="numeric"
+                value={phone}
+                onChange={handlePhoneChange}
+                placeholder="(00) 0 0000-0000"
+                maxLength={16}
+                className="w-full h-11 px-3.5 rounded-xl border border-[#D8C4A8] bg-white text-sm text-[#173F2A] font-mono focus:outline-none focus:border-[#2F7D4A] focus:ring-1 focus:ring-[#2F7D4A]"
+              />
+            </div>
+
+            {/* Nome do Produtor */}
+            <div>
+              <label htmlFor="producer-name" className="block text-xs font-bold text-[#173F2A] uppercase tracking-wide mb-1">
+                Nome Completo ou Como Prefere Ser Chamado:
+              </label>
+              <input
+                id="producer-name"
                 type="text"
                 value={producerName}
                 onChange={(e) => setProducerName(e.target.value)}
                 placeholder="Ex: João Ferreira"
-                className="w-full h-12 px-4 rounded-xl border border-[#D8C4A8] bg-white text-base text-[#173F2A] focus:outline-none focus:border-[#2F7D4A] focus:ring-1 focus:ring-[#2F7D4A]"
-                autoFocus
+                className="w-full h-11 px-3.5 rounded-xl border border-[#D8C4A8] bg-white text-sm text-[#173F2A] focus:outline-none focus:border-[#2F7D4A] focus:ring-1 focus:ring-[#2F7D4A]"
               />
             </div>
 
+            {/* Nome da Fazenda */}
             <div>
-              <label className="block text-sm font-semibold text-[#173F2A] mb-2">
-                Nome da fazenda ou sítio:
+              <label htmlFor="property-name" className="block text-xs font-bold text-[#173F2A] uppercase tracking-wide mb-1">
+                Nome da Fazenda ou Sítio:
               </label>
               <input
+                id="property-name"
                 type="text"
                 value={propertyName}
                 onChange={(e) => setPropertyName(e.target.value)}
-                placeholder="Ex: Sítio Bela Vista"
-                className="w-full h-12 px-4 rounded-xl border border-[#D8C4A8] bg-white text-base text-[#173F2A] focus:outline-none focus:border-[#2F7D4A] focus:ring-1 focus:ring-[#2F7D4A]"
+                placeholder="Ex: Fazenda Bela Vista, Sítio Três Meninas"
+                className="w-full h-11 px-3.5 rounded-xl border border-[#D8C4A8] bg-white text-sm text-[#173F2A] focus:outline-none focus:border-[#2F7D4A] focus:ring-1 focus:ring-[#2F7D4A]"
               />
-              <p className="text-xs text-[#6B4A35] mt-1.5">
-                O nome pelo qual sua terra é conhecida na região.
-              </p>
             </div>
 
             <div className="flex justify-between items-center pt-4 border-t border-[#D8C4A8]/20">
-              <Button variant="outline" onClick={() => setStep(0)}>
-                Voltar
-              </Button>
+              {onCancel ? (
+                <Button variant="outline" onClick={onCancel}>
+                  Voltar ao Início
+                </Button>
+              ) : (
+                <span />
+              )}
               <Button
                 variant="primary"
-                disabled={!producerName.trim() || !propertyName.trim()}
+                disabled={!isCpfValid || !producerName.trim() || !propertyName.trim()}
                 onClick={() => setStep(2)}
               >
-                Continuar
+                Continuar para Localização
               </Button>
             </div>
           </div>
