@@ -1,162 +1,96 @@
-/**
- * Offline Store & Fila de Mutações Idempotente (Volume 02-E01, Volume 14)
- * Persiste localmente a identidade invisível, produtor, propriedades, talhões e eventos.
- * Sem dados fictícios iniciais.
- */
+import { openDB } from 'idb';
+import type { ProducerProfile, Property, Plot, CropCycle, FieldEvent } from '../domain/entities';
+import type { InvisibleIdentity, Mutation, SyncEntity } from '../domain/sync';
+export type { Mutation } from '../domain/sync';
 
-import { ProducerProfile, Property, Plot, CropCycle, FieldEvent } from '../domain/entities';
-
-const STORAGE_KEYS = {
-  DEVICE_SESSION: 'agro_device_session_id',
-  PRODUCER: 'agro_producer_profile',
-  PROPERTIES: 'agro_properties',
-  PLOTS: 'agro_plots',
-  EVENTS: 'agro_field_events',
-  MUTATION_QUEUE: 'agro_mutation_queue',
-  LAST_SYNC: 'agro_last_sync_timestamp',
-};
-
-export interface Mutation {
-  id: string; // client_generated_id
-  entity: 'property' | 'plot' | 'field_event' | 'crop_cycle';
-  action: 'insert' | 'update' | 'delete';
-  payload: Record<string, unknown>;
-  timestamp: string;
-  status: 'pending' | 'synced' | 'failed';
-  retryCount: number;
-}
-
-// Utilitário para gerar UUID v4 no navegador
-export function generateUUID(): string {
-  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
-    return crypto.randomUUID();
-  }
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
-    const r = (Math.random() * 16) | 0;
-    const v = c === 'x' ? r : (r & 0x3) | 0x8;
-    return v.toString(16);
-  });
-}
-
-// Identidade Técnica Invisível (V02-E01)
+export function generateUUID(): string { return crypto.randomUUID(); }
 export function getOrCreateDeviceSessionId(): string {
-  let sessionId = localStorage.getItem(STORAGE_KEYS.DEVICE_SESSION);
-  if (!sessionId) {
-    sessionId = `dev_${generateUUID()}`;
-    localStorage.setItem(STORAGE_KEYS.DEVICE_SESSION, sessionId);
-  }
-  return sessionId;
+  let id = localStorage.getItem('agro_device_session_id');
+  if (!id) { id = `dev_${generateUUID()}`; localStorage.setItem('agro_device_session_id', id); }
+  return id;
 }
-
+interface State {
+  version: 1;
+  identity: InvisibleIdentity;
+  producer: ProducerProfile | null;
+  properties: Property[];
+  plots: Plot[];
+  cycles: CropCycle[];
+  events: FieldEvent[];
+  queue: Mutation[];
+  lastSync?: string;
+}
+const db = () => openDB('folha-viva', 1, { upgrade(db) { db.createObjectStore('state'); } });
+const changed = () => { if (typeof window !== 'undefined') window.dispatchEvent(new Event('folha-store-changed')); };
+function enqueue(s: State, entity: SyncEntity, payload: object) {
+  s.queue.push({ id: generateUUID(), entity, action: 'insert', payload: payload as Record<string, unknown>, timestamp: new Date().toISOString(), status: 'pending', retryCount: 0 });
+}
+function upsert<T extends { id: string }>(rows: T[], row: T) {
+  const index = rows.findIndex(r => r.id === row.id);
+  if (index < 0) rows.push(row); else rows[index] = row;
+}
+function putPlot(s: State, plot: Plot) {
+  upsert(s.plots, plot); enqueue(s, 'plot', plot);
+  if (plot.cropCycle) { upsert(s.cycles, plot.cropCycle); enqueue(s, 'crop_cycle', plot.cropCycle); }
+}
+async function edit<T>(fn: (s: State) => T): Promise<T> {
+  const database = await db();
+  try {
+    const tx = database.transaction('state', 'readwrite');
+    const s = await tx.store.get('current') as State;
+    const result = fn(s);
+    await tx.store.put(s, 'current'); await tx.done; changed(); return result;
+  } finally { database.close(); }
+}
 export class OfflineStore {
-  // Obter perfil do produtor cadastrado
-  static getProducerProfile(): ProducerProfile | null {
-    const data = localStorage.getItem(STORAGE_KEYS.PRODUCER);
-    return data ? JSON.parse(data) : null;
+  static async initialize() {
+    const database = await db();
+    try {
+      const tx = database.transaction('state', 'readwrite');
+      if (!(await tx.store.get('current'))) {
+        // Falha de JSON aborta a importação; legado permanece intacto para recuperação.
+        const legacy = <T>(key: string, fallback: T): T => JSON.parse(localStorage.getItem(key) || JSON.stringify(fallback));
+        const producer = legacy<ProducerProfile | null>('agro_producer_profile', null);
+        const properties = legacy<Property[]>('agro_properties', []);
+        const plots = legacy<Plot[]>('agro_plots', []);
+        const events = legacy<FieldEvent[]>('agro_field_events', []);
+        const s: State = { version: 1, identity: { deviceSessionId: getOrCreateDeviceSessionId(), ownerSubject: null, state: 'local' }, producer, properties, plots, cycles: [], events, queue: [] };
+        // A fila antiga nunca foi enviada. Reconstruir em ordem e corrigir produtor como propriedade.
+        if (producer) enqueue(s, 'producer_profile', producer);
+        properties.forEach(p => enqueue(s, 'property', p));
+        plots.forEach(p => { enqueue(s, 'plot', p); if (p.cropCycle) { s.cycles.push(p.cropCycle); enqueue(s, 'crop_cycle', p.cropCycle); } });
+        events.forEach(e => enqueue(s, 'field_event', e));
+        await tx.store.put(s, 'current');
+      }
+      await tx.done;
+    } finally { database.close(); }
   }
-
-  // Salvar perfil do produtor
-  static saveProducerProfile(displayName: string): ProducerProfile {
-    const deviceSessionId = getOrCreateDeviceSessionId();
-    const existing = this.getProducerProfile();
-    const profile: ProducerProfile = {
-      id: existing ? existing.id : generateUUID(),
-      deviceSessionId,
-      displayName: displayName.trim(),
-      createdAt: existing ? existing.createdAt : new Date().toISOString(),
-    };
-    localStorage.setItem(STORAGE_KEYS.PRODUCER, JSON.stringify(profile));
-    this.enqueueMutation('insert', 'property', profile as unknown as Record<string, unknown>);
-    return profile;
+  static async snapshot(): Promise<State> {
+    const database = await db();
+    try { return await database.get('state', 'current') as State; } finally { database.close(); }
   }
-
-  // Obter propriedades do produtor (Array vazio por padrão, sem dados fictícios)
-  static getProperties(): Property[] {
-    const data = localStorage.getItem(STORAGE_KEYS.PROPERTIES);
-    return data ? JSON.parse(data) : [];
+  static async saveRegistration(producer: ProducerProfile, property: Property, plot?: Plot) {
+    if (!producer.displayName.trim() || !property.name.trim()) throw new Error('Preencha seu nome e o da propriedade.');
+    await edit(s => { s.producer = producer; upsert(s.properties, property); enqueue(s, 'producer_profile', producer); enqueue(s, 'property', property); if (plot) putPlot(s, plot); });
   }
-
-  // Salvar nova propriedade
-  static saveProperty(property: Property): void {
-    const properties = this.getProperties();
-    const existingIdx = properties.findIndex((p) => p.id === property.id);
-    if (existingIdx >= 0) {
-      properties[existingIdx] = property;
-    } else {
-      properties.push(property);
-    }
-    localStorage.setItem(STORAGE_KEYS.PROPERTIES, JSON.stringify(properties));
-    this.enqueueMutation('insert', 'property', property as unknown as Record<string, unknown>);
+  static async savePlot(plot: Plot) { await edit(s => putPlot(s, plot)); }
+  static async saveFieldEvent(event: FieldEvent) {
+    await edit(s => { if (!s.events.some(e => e.id === event.id)) { s.events.unshift(event); enqueue(s, 'field_event', event); } });
   }
-
-  // Obter talhões da propriedade
-  static getPlots(propertyId?: string): Plot[] {
-    const data = localStorage.getItem(STORAGE_KEYS.PLOTS);
-    const plots: Plot[] = data ? JSON.parse(data) : [];
-    if (propertyId) {
-      return plots.filter((p) => p.propertyId === propertyId);
-    }
-    return plots;
+  static async bindIdentity(ownerSubject: string, anonymous: boolean) {
+    await edit(s => {
+      if (s.identity.ownerSubject && s.identity.ownerSubject !== ownerSubject) throw new Error('A sessão mudou. Seus dados locais foram preservados; recupere a conta original para enviar.');
+      s.identity.ownerSubject = ownerSubject; s.identity.state = anonymous ? 'anonymous' : 'linked';
+    });
   }
-
-  // Salvar talhão
-  static savePlot(plot: Plot): void {
-    const plots = this.getPlots();
-    const existingIdx = plots.findIndex((p) => p.id === plot.id);
-    if (existingIdx >= 0) {
-      plots[existingIdx] = plot;
-    } else {
-      plots.push(plot);
-    }
-    localStorage.setItem(STORAGE_KEYS.PLOTS, JSON.stringify(plots));
-    this.enqueueMutation('insert', 'plot', plot as unknown as Record<string, unknown>);
+  static async acknowledge(id: string, committedAt: string) {
+    await edit(s => { const m = s.queue.find(m => m.id === id); if (m) { m.status = 'synced'; delete m.error; } s.lastSync = committedAt; });
   }
-
-  // Obter eventos de campo
-  static getFieldEvents(plotId?: string): FieldEvent[] {
-    const data = localStorage.getItem(STORAGE_KEYS.EVENTS);
-    const events: FieldEvent[] = data ? JSON.parse(data) : [];
-    if (plotId) {
-      return events.filter((e) => e.plotId === plotId);
-    }
-    return events;
+  static async fail(id: string, message: string) {
+    await edit(s => { const m = s.queue.find(m => m.id === id); if (m) { m.status = 'failed'; m.retryCount++; m.error = message; m.nextAttemptAt = Date.now() + Math.min(300000, 1000 * 2 ** Math.min(m.retryCount, 8)); } });
   }
-
-  // Registrar evento de campo
-  static saveFieldEvent(event: FieldEvent): void {
-    const events = this.getFieldEvents();
-    events.unshift(event); // mais recente primeiro
-    localStorage.setItem(STORAGE_KEYS.EVENTS, JSON.stringify(events));
-    this.enqueueMutation('insert', 'field_event', event as unknown as Record<string, unknown>);
-  }
-
-  // Fila de Mutações Idempotente (V14-E02)
-  static getMutationQueue(): Mutation[] {
-    const data = localStorage.getItem(STORAGE_KEYS.MUTATION_QUEUE);
-    return data ? JSON.parse(data) : [];
-  }
-
-  static enqueueMutation(action: Mutation['action'], entity: Mutation['entity'], payload: Record<string, unknown>): void {
-    const queue = this.getMutationQueue();
-    const mutation: Mutation = {
-      id: generateUUID(),
-      entity,
-      action,
-      payload,
-      timestamp: new Date().toISOString(),
-      status: 'pending',
-      retryCount: 0,
-    };
-    queue.push(mutation);
-    localStorage.setItem(STORAGE_KEYS.MUTATION_QUEUE, JSON.stringify(queue));
-  }
-
-  static clearDatabase(): void {
-    localStorage.removeItem(STORAGE_KEYS.PRODUCER);
-    localStorage.removeItem(STORAGE_KEYS.PROPERTIES);
-    localStorage.removeItem(STORAGE_KEYS.PLOTS);
-    localStorage.removeItem(STORAGE_KEYS.EVENTS);
-    localStorage.removeItem(STORAGE_KEYS.MUTATION_QUEUE);
-    localStorage.removeItem(STORAGE_KEYS.LAST_SYNC);
+  static async clearDatabase() {
+    await edit(s => { s.producer = null; s.properties = []; s.plots = []; s.cycles = []; s.events = []; s.queue = []; delete s.lastSync; });
+    ['agro_producer_profile','agro_properties','agro_plots','agro_field_events','agro_mutation_queue','agro_last_sync_timestamp'].forEach(k => localStorage.removeItem(k));
   }
 }

@@ -14,6 +14,8 @@ import { NewPlotModal } from './features/field/NewPlotModal';
 import { AuditModal } from './features/audit/AuditModal';
 import { PWAInstallButton } from './components/ui/PWAInstallButton';
 import { OfflineIndicator } from './components/ui/OfflineIndicator';
+import { startSynchronization, getSyncStatus, synchronize } from './services/syncService';
+import type { SyncStatus } from './domain/sync';
 
 export default function App() {
   const [deviceSessionId, setDeviceSessionId] = useState<string>('');
@@ -22,6 +24,9 @@ export default function App() {
   const [plots, setPlots] = useState<Plot[]>([]);
   const [events, setEvents] = useState<FieldEvent[]>([]);
   const [pendingCount, setPendingCount] = useState<number>(0);
+  const [ready, setReady] = useState(false);
+  const [storageError, setStorageError] = useState<string | null>(null);
+  const [syncStatus, setSyncStatus] = useState<SyncStatus>(getSyncStatus());
 
   // Modais
   const [isFieldNotebookOpen, setIsFieldNotebookOpen] = useState(false);
@@ -31,28 +36,34 @@ export default function App() {
 
   // Inicialização da Sessão Técnica Invisível (V02-E01) e leitura do store local
   useEffect(() => {
-    const session = getOrCreateDeviceSessionId();
-    setDeviceSessionId(session);
-
-    loadLocalData();
+    let alive = true;
+    let stop = () => {};
+    const refresh = () => { void loadLocalData().catch(() => setStorageError('Não foi possível ler os dados deste aparelho.')); };
+    const updateSync = () => setSyncStatus(getSyncStatus());
+    window.addEventListener('folha-store-changed', refresh);
+    window.addEventListener('folha-sync-changed', updateSync);
+    void OfflineStore.initialize().then(async () => {
+      if (!alive) return;
+      setDeviceSessionId(getOrCreateDeviceSessionId());
+      await loadLocalData();
+      if (!alive) return;
+      setReady(true); stop = startSynchronization();
+    }).catch(() => setStorageError('Não foi possível abrir os dados locais. Seus registros anteriores foram preservados.'));
+    return () => { alive = false; stop(); window.removeEventListener('folha-store-changed', refresh); window.removeEventListener('folha-sync-changed', updateSync); };
   }, []);
 
-  const loadLocalData = () => {
-    const p = OfflineStore.getProducerProfile();
-    const props = OfflineStore.getProperties();
-    const plts = OfflineStore.getPlots();
-    const evts = OfflineStore.getFieldEvents();
-    const queue = OfflineStore.getMutationQueue();
+  const loadLocalData = async () => {
+    const { producer: p, properties: props, plots: plts, events: evts, queue } = await OfflineStore.snapshot();
 
     setProducer(p);
     setProperties(props);
     setPlots(plts);
     setEvents(evts);
-    setPendingCount(queue.filter((m) => m.status === 'pending').length);
+    setPendingCount(queue.filter((m) => m.status !== 'synced').length);
   };
 
   // Conclusão do Onboarding Inicial Real (Apêndice I)
-  const handleOnboardingComplete = (data: {
+  const handleOnboardingComplete = async (data: {
     producerName: string;
     propertyName: string;
     activityProfile: ActivityProfile;
@@ -65,7 +76,11 @@ export default function App() {
     initialPlotName?: string;
   }) => {
     // 1. Salvar perfil do produtor
-    const newProducer = OfflineStore.saveProducerProfile(data.producerName);
+    const previous = (await OfflineStore.snapshot()).producer;
+    const newProducer: ProducerProfile = {
+      id: previous?.id || generateUUID(), deviceSessionId,
+      displayName: data.producerName.trim(), createdAt: previous?.createdAt || new Date().toISOString(),
+    };
 
     // 2. Salvar propriedade
     const propertyId = generateUUID();
@@ -78,7 +93,7 @@ export default function App() {
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
-    OfflineStore.saveProperty(newProperty);
+    let initialPlot: Plot | undefined;
 
     // 3. Salvar primeiro talhão se desenhado
     if (data.initialPlotPolygon && data.initialPlotPolygon.length >= 3) {
@@ -91,7 +106,7 @@ export default function App() {
           type: 'Polygon',
           coordinates: data.initialPlotPolygon,
         },
-        areaHa: data.initialPlotAreaHa || 1.0,
+        areaHa: data.initialPlotAreaHa || 0,
         active: true,
         createdAt: new Date().toISOString(),
         cropCycle: {
@@ -103,29 +118,34 @@ export default function App() {
           startDate: new Date().toISOString().split('T')[0],
         },
       };
-      OfflineStore.savePlot(newPlot);
+      initialPlot = newPlot;
     }
 
-    loadLocalData();
+    await OfflineStore.saveRegistration(newProducer, newProperty, initialPlot);
+    await loadLocalData();
   };
 
   // Salvar novo talhão avulso
-  const handleSavePlot = (plot: Plot) => {
-    OfflineStore.savePlot(plot);
-    loadLocalData();
+  const handleSavePlot = async (plot: Plot) => {
+    await OfflineStore.savePlot(plot);
+    await loadLocalData();
   };
 
   // Salvar evento no caderno de campo
-  const handleSaveFieldEvent = (event: FieldEvent) => {
-    OfflineStore.saveFieldEvent(event);
-    loadLocalData();
+  const handleSaveFieldEvent = async (event: FieldEvent) => {
+    await OfflineStore.saveFieldEvent(event);
+    await loadLocalData();
   };
 
   // Reset para demonstração / homologação limpa
-  const handleResetData = () => {
+  const handleResetData = async () => {
+    if ((await OfflineStore.snapshot()).identity.ownerSubject) {
+      setStorageError('Este aparelho já está vinculado à sua sessão. A limpeza exige um fluxo de recuperação para preservar seus registros.');
+      return;
+    }
     if (window.confirm('Deseja limpar todos os dados cadastrados neste aparelho e reiniciar o onboarding?')) {
-      OfflineStore.clearDatabase();
-      loadLocalData();
+      try { await OfflineStore.clearDatabase(); await loadLocalData(); }
+      catch { setStorageError('Não foi possível limpar os dados locais.'); }
     }
   };
 
@@ -156,12 +176,12 @@ export default function App() {
               <span>Livro Raiz & Manual</span>
             </button>
             <span className="text-stone-300">|</span>
-            <span>Versão 1.0 (Canônica)</span>
+            <span>Versão 0.2 — em validação</span>
           </div>
 
           {/* Zone 3: Primary Actions (Offline Indicator + PWA Install) */}
           <div className="flex items-center gap-3">
-            <OfflineIndicator pendingMutationsCount={pendingCount} />
+            <OfflineIndicator pendingMutationsCount={pendingCount} status={syncStatus} onRetry={() => void synchronize(true)} />
             <PWAInstallButton />
           </div>
         </div>
@@ -169,7 +189,8 @@ export default function App() {
 
       {/* Main Content Viewport */}
       <main className="flex-1 max-w-6xl w-full mx-auto p-4 sm:p-6">
-        {!producer || !activeProperty ? (
+        {storageError && <p role="alert" className="p-4 text-red-800">{storageError} <button onClick={() => window.location.reload()}>Tentar novamente</button></p>}
+        {!ready ? <p role="status">Abrindo seus dados…</p> : !producer || !activeProperty ? (
           <OnboardingWizard onComplete={handleOnboardingComplete} />
         ) : (
           <ProducerDashboard

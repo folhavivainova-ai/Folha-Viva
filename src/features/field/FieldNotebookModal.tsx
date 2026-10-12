@@ -9,7 +9,7 @@ interface FieldNotebookModalProps {
   selectedPlotId?: string;
   isOpen: boolean;
   onClose: () => void;
-  onSaveEvent: (event: FieldEvent) => void;
+  onSaveEvent: (event: FieldEvent) => Promise<void>;
 }
 
 export const FieldNotebookModal: React.FC<FieldNotebookModalProps> = ({
@@ -24,6 +24,8 @@ export const FieldNotebookModal: React.FC<FieldNotebookModalProps> = ({
   );
   const [eventType, setEventType] = useState<FieldEventType>('inspection');
   const [notes, setNotes] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [irrigationMm, setIrrigationMm] = useState('');
   const [irrigationHours, setIrrigationHours] = useState('');
   const [severity, setSeverity] = useState<'info' | 'attention' | 'high'>('info');
@@ -34,7 +36,8 @@ export const FieldNotebookModal: React.FC<FieldNotebookModalProps> = ({
   const isCoffee = currentPlot?.cropCycle?.cropType === 'coffee';
   const isPasture = currentPlot?.cropCycle?.cropType === 'pasture';
 
-  const handleSave = () => {
+  const handleSave = async () => {
+    if (saving) return;
     if (!activePlotId) return;
 
     const payload: Record<string, unknown> = {
@@ -60,14 +63,16 @@ export const FieldNotebookModal: React.FC<FieldNotebookModalProps> = ({
       createdAt: new Date().toISOString(),
     };
 
-    onSaveEvent(event);
-    onClose();
-    setNotes('');
+    setSaving(true); setSaveError(null);
+    try { await onSaveEvent(event); onClose(); setNotes(''); }
+    catch { setSaveError('Não foi possível salvar o registro. Tente novamente.'); }
+    finally { setSaving(false); }
   };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
       <div className="w-full max-w-lg rounded-2xl bg-[#FFFDF7] p-5 sm:p-6 shadow-2xl border border-[#D8C4A8] max-h-[90vh] overflow-y-auto">
+        {saveError && <p role="alert">{saveError}</p>}
         <div className="flex items-center justify-between pb-3 border-b border-[#D8C4A8]/30">
           <div>
             <h3 className="text-base sm:text-lg font-bold text-[#173F2A]">
@@ -301,7 +306,7 @@ export const FieldNotebookModal: React.FC<FieldNotebookModalProps> = ({
             <Button variant="outline" onClick={onClose}>
               Cancelar
             </Button>
-            <Button variant="primary" onClick={handleSave}>
+            <Button variant="primary" onClick={handleSave} disabled={saving}>
               Salvar Registro
             </Button>
           </div>

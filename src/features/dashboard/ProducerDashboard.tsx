@@ -20,7 +20,7 @@ import { StatusChip } from '../../components/ui/StatusChip';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { OpenMapView } from '../map/OpenMapView';
 import { ProducerProfile, Property, Plot, FieldEvent } from '../../domain/entities';
-import { WeatherService, WeatherSummary } from '../../services/weatherProvider';
+import { weatherProvider, WeatherSummary } from '../../services/weatherProvider';
 
 interface ProducerDashboardProps {
   producer: ProducerProfile;
@@ -53,18 +53,21 @@ export const ProducerDashboard: React.FC<ProducerDashboardProps> = ({
     let lat = property.centroid?.lat;
     let lng = property.centroid?.lng;
 
-    if ((!lat || !lng) && plots.length > 0 && plots[0].geometry.coordinates.length > 0) {
+    if ((lat === undefined || lng === undefined) && plots.length > 0 && plots[0].geometry.coordinates.length > 0) {
       lat = plots[0].geometry.coordinates[0][0];
       lng = plots[0].geometry.coordinates[0][1];
     }
 
-    if (lat && lng) {
+    let active = true;
+    setWeather(null);
+    if (lat !== undefined && lng !== undefined) {
       setLoadingWeather(true);
-      WeatherService.fetchWeather(lat, lng)
-        .then((res) => setWeather(res))
+      weatherProvider.fetchWeather(lat, lng)
+        .then((res) => { if (active) setWeather(res); })
         .catch(() => {})
-        .finally(() => setLoadingWeather(false));
+        .finally(() => { if (active) setLoadingWeather(false); });
     }
+    return () => { active = false; };
   }, [property, plots]);
 
   // Se a lista de talhões mudar e o selecionado sumir
@@ -178,10 +181,11 @@ export const ProducerDashboard: React.FC<ProducerDashboardProps> = ({
 
               {loadingWeather ? (
                 <div className="py-6 text-center text-xs text-stone-500 animate-pulse">
-                  Consultando estação meteorológica aberta para as coordenadas locais...
+                  Consultando previsão para este local...
                 </div>
               ) : weather ? (
                 <div className="pt-3 space-y-4">
+                  <p className="text-xs text-stone-600">{weather.source} · Atualizado em {new Date(weather.updatedAt).toLocaleString('pt-BR')}</p>
                   <div className="flex flex-wrap items-baseline justify-between gap-2">
                     <div>
                       <span className="text-3xl sm:text-4xl font-extrabold text-[#173F2A] tabular-nums">
