@@ -2,6 +2,8 @@
 ## PLATAFORMA DE MONITORAMENTO AGRÍCOLA INTELIGENTE
 **Café + Capim | Web responsivo + PWA mobile | Satélite + Clima + Offline + IA**
 
+> Este Markdown é um resumo normativo da versão 1.0, não a íntegra do PDF original fornecido na conversa anterior. Para homologar, consultar o PDF e o checklist vertical. Livro Raiz registra execução e não altera os critérios da norma. V04 permanece fora da retomada atual.
+
 - **Versão:** 1.0 (Documento normativo inicial)
 - **Data-base:** 20/09/2026
 - **Escopo inicial:** Monitoramento de café e capim

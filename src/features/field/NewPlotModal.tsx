@@ -9,7 +9,7 @@ interface NewPlotModalProps {
   propertyId: string;
   isOpen: boolean;
   onClose: () => void;
-  onSavePlot: (plot: Plot) => void;
+  onSavePlot: (plot: Plot) => Promise<void>;
   centerCoord?: [number, number];
 }
 
@@ -21,6 +21,8 @@ export const NewPlotModal: React.FC<NewPlotModalProps> = ({
   centerCoord = [-20.0, -44.0],
 }) => {
   const [name, setName] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [cropType, setCropType] = useState<CropType>('coffee');
   const [coffeeSubtype, setCoffeeSubtype] = useState<CoffeeSubtype>('convencional');
   const [cultivar, setCultivar] = useState('');
@@ -29,7 +31,8 @@ export const NewPlotModal: React.FC<NewPlotModalProps> = ({
 
   if (!isOpen) return null;
 
-  const handleSave = () => {
+  const handleSave = async () => {
+    if (saving) return;
     if (!name.trim() || polygonCoords.length < 3) return;
 
     const plotId = generateUUID();
@@ -54,13 +57,16 @@ export const NewPlotModal: React.FC<NewPlotModalProps> = ({
       },
     };
 
-    onSavePlot(newPlot);
-    onClose();
+    setSaving(true); setSaveError(null);
+    try { await onSavePlot(newPlot); onClose(); }
+    catch { setSaveError('Não foi possível salvar o talhão. Tente novamente.'); }
+    finally { setSaving(false); }
   };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
       <div className="w-full max-w-xl rounded-2xl bg-[#FFFDF7] p-5 shadow-2xl border border-[#D8C4A8] max-h-[90vh] overflow-y-auto">
+        {saveError && <p role="alert">{saveError}</p>}
         <div className="flex items-center justify-between pb-3 border-b border-[#D8C4A8]/30">
           <div>
             <h3 className="text-base font-bold text-[#173F2A]">Cadastrar Novo Talhão</h3>
@@ -160,7 +166,7 @@ export const NewPlotModal: React.FC<NewPlotModalProps> = ({
             </Button>
             <Button
               variant="primary"
-              disabled={!name.trim() || polygonCoords.length < 3}
+              disabled={saving || !name.trim() || polygonCoords.length < 3}
               onClick={handleSave}
             >
               Salvar Talhão

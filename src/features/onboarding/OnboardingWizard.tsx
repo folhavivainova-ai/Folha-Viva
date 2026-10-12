@@ -17,11 +17,13 @@ interface OnboardingWizardProps {
     initialPlotPolygon?: [number, number][];
     initialPlotAreaHa?: number;
     initialPlotName?: string;
-  }) => void;
+  }) => Promise<void>;
 }
 
 export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({ onComplete }) => {
   const [step, setStep] = useState<number>(0);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [producerName, setProducerName] = useState('');
   const [propertyName, setPropertyName] = useState('');
   const [activityProfile, setActivityProfile] = useState<ActivityProfile>('coffee');
@@ -71,8 +73,10 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({ onComplete }
     setPlotAreaHa(areaHa);
   };
 
-  const handleFinalSubmit = () => {
-    onComplete({
+  const handleFinalSubmit = async () => {
+    if (saving) return;
+    setSaving(true); setSaveError(null);
+    try { await onComplete({
       producerName: producerName.trim() || 'Produtor',
       propertyName: propertyName.trim() || 'Minha Fazenda',
       activityProfile,
@@ -83,11 +87,13 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({ onComplete }
       initialPlotPolygon: plotCoords.length >= 3 ? plotCoords : undefined,
       initialPlotAreaHa: plotAreaHa > 0 ? plotAreaHa : undefined,
       initialPlotName: plotName.trim() || 'Talhão 1',
-    });
+    }); } catch { setSaveError('Não foi possível salvar neste aparelho. Tente novamente.'); }
+    finally { setSaving(false); }
   };
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-8">
+      {saveError && <p role="alert" className="text-red-800 p-3">{saveError}</p>}
       {/* Etapa 0: Abertura Direta (Apêndice I - Passo 1) */}
       {step === 0 && (
         <div className="text-center py-6 space-y-6">
@@ -113,7 +119,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({ onComplete }
               <span>Sem senha e sem login</span>
             </div>
             <p>
-              Inicie direto no seu celular ou computador. Seus dados ficam salvos com segurança no aparelho e sincronizam quando houver internet.
+              Inicie direto no seu celular ou computador. Seus dados ficam salvos neste aparelho. Acompanhe o envio pela indicação no topo da tela.
             </p>
           </div>
 
@@ -429,6 +435,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({ onComplete }
               <Button
                 variant="primary"
                 onClick={handleFinalSubmit}
+                disabled={saving}
               >
                 Salvar e Abrir Lavoura
               </Button>

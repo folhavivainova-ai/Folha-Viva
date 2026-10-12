@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
+import { openMapProvider } from '../../services/mapProvider';
 import { Layers, Crosshair, MapPin, ZoomIn, ZoomOut } from 'lucide-react';
 import { Plot, GeoPoint } from '../../domain/entities';
 
@@ -16,27 +17,7 @@ interface OpenMapViewProps {
   className?: string;
 }
 
-// Provedores de mapa abertos conforme V03-E04 (Sem dependência de chave Google)
-const MAP_LAYERS = {
-  satellite: {
-    name: 'Satélite',
-    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-    attribution: 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community',
-    maxZoom: 18,
-  },
-  streets: {
-    name: 'Mapa Padrão',
-    url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-    maxZoom: 19,
-  },
-  topo: {
-    name: 'Relevo',
-    url: 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
-    attribution: 'Map data: &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>, <a href="http://viewfinderpanoramas.org">SRTM</a>',
-    maxZoom: 17,
-  },
-};
+const MAP_LAYERS = openMapProvider.layers;
 
 // Cálculo geodésico aproximado de área em hectares para polígonos
 export function calculatePolygonAreaHa(coords: [number, number][]): number {
@@ -157,8 +138,11 @@ export const OpenMapView: React.FC<OpenMapViewProps> = ({
         fillOpacity: isSelected ? 0.45 : 0.25,
       });
 
+      const tooltip = document.createElement('div');
+      tooltip.className = 'text-xs font-semibold text-stone-900';
+      tooltip.textContent = `${plot.name} (${plot.areaHa} ha)`;
       poly.bindTooltip(
-        `<div class="text-xs font-semibold text-stone-900">${plot.name} (${plot.areaHa} ha)</div>`,
+        tooltip,
         { permanent: false, direction: 'center', className: 'rounded px-2 py-1 shadow-sm' }
       );
 

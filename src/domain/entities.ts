@@ -86,8 +86,8 @@ export interface WeatherDataPoint {
   timestamp: string;
   tempC: number;
   precipMm: number;
-  humidityPct: number;
-  windSpeedKmH: number;
+  humidityPct: number | null;
+  windSpeedKmH: number | null;
   et0Mm: number;
   conditionText: string;
   isForecast?: boolean;

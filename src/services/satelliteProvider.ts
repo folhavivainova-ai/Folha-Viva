@@ -37,13 +37,13 @@ export interface ISatelliteProvider {
   getPlotMetrics(plotId: string, sceneId: string): Promise<PlotVegetationMetric[]>;
 }
 
-export class MockableSatelliteProvider implements ISatelliteProvider {
+export class DisabledSatelliteProvider implements ISatelliteProvider {
   async searchScenes(_options: SatelliteQueryOptions): Promise<SatelliteSceneMetadata[]> {
     // Retorna vazio quando não houver cenas reais ingeridas ainda
-    return [];
+    throw new Error('Monitoramento por satélite ainda indisponível.');
   }
 
   async getPlotMetrics(_plotId: string, _sceneId: string): Promise<PlotVegetationMetric[]> {
-    return [];
+    throw new Error('Métricas de satélite ainda indisponíveis.');
   }
 }
